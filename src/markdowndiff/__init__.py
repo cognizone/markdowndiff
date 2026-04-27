@@ -183,6 +183,10 @@ def should_word_diff(old_line: str, new_line: str) -> bool:
 
 
 def inline_word_diff(old_line: str, new_line: str) -> str:
+    old_prefix, old_content = split_block_prefix(old_line)
+    new_prefix, new_content = split_block_prefix(new_line)
+    if old_prefix and old_prefix == new_prefix:
+        return new_prefix + inline_word_diff(old_content, new_content)
     old_toks = tokenize_line(old_line)
     new_toks = tokenize_line(new_line)
     matcher = difflib.SequenceMatcher(a=old_toks, b=new_toks, autojunk=False)
@@ -398,10 +402,21 @@ def diff_to_markdown(old: str, new: str) -> str:
                 new_other_idxs = [
                     j for j in range(j1, j2) if not is_table_row(new_lines[j])
                 ]
-                for i in old_row_idxs:
-                    emit_old_delete(i, old_lines[i])
-                for j in new_row_idxs:
-                    emit_new(j, new_lines[j], wrap_ins)
+                if (
+                    old_row_idxs
+                    and len(old_row_idxs) == len(new_row_idxs)
+                    and all(
+                        should_word_diff(old_lines[i], new_lines[j])
+                        for i, j in zip(old_row_idxs, new_row_idxs)
+                    )
+                ):
+                    for i, j in zip(old_row_idxs, new_row_idxs):
+                        out.append(inline_word_diff(old_lines[i], new_lines[j]))
+                else:
+                    for i in old_row_idxs:
+                        emit_old_delete(i, old_lines[i])
+                    for j in new_row_idxs:
+                        emit_new(j, new_lines[j], wrap_ins)
                 had_rows = bool(old_row_idxs or new_row_idxs)
                 had_other = bool(old_other_idxs or new_other_idxs)
                 if had_rows and had_other and out and out[-1] != "":

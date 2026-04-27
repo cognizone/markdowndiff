@@ -158,6 +158,23 @@ class InlineWordDiffTests(unittest.TestCase):
         self.assertIn("the ", result)
         self.assertIn(" fox", result)
 
+    def test_heading_prefix_preserved_outside_tags(self):
+        # Regression: heading word-diff used to absorb the space after `#`
+        # into the <ins> tag, leaving `#<ins>` which breaks ATX heading parsing.
+        result = md.inline_word_diff(
+            "# Pancake Recipe", "# Fluffy Pancake Recipe"
+        )
+        self.assertTrue(result.startswith("# "))
+        self.assertIn("Fluffy", result)
+
+    def test_list_bullet_prefix_preserved_outside_tags(self):
+        result = md.inline_word_diff("- old item", "- new item")
+        self.assertTrue(result.startswith("- "))
+
+    def test_blockquote_prefix_preserved_outside_tags(self):
+        result = md.inline_word_diff("> say hi", "> say hello")
+        self.assertTrue(result.startswith("> "))
+
 
 class MapOldToNewIndexTests(unittest.TestCase):
     def test_in_equal_region(self):
@@ -267,6 +284,69 @@ class DiffTableRowEditTests(unittest.TestCase):
                     line.lstrip().startswith("|"),
                     f"table row must start with pipe: {line!r}",
                 )
+
+
+class DiffTableMultiRowEditTests(unittest.TestCase):
+    """Regression: two adjacent rows changing only one cell each used to emit
+    full-row del + full-row ins (4 rendered rows). They should pair up and
+    word-diff so only the changed cells are wrapped."""
+
+    def test_paired_rows_word_diff_only_changed_cells(self):
+        old = (
+            "| Step | Time   |\n"
+            "| ---- | ------ |\n"
+            "| Mix  | 2 min  |\n"
+            "| Rest | 10 min |\n"
+            "| Fry  | 5 min  |\n"
+        )
+        new = (
+            "| Step | Time   |\n"
+            "| ---- | ------ |\n"
+            "| Mix  | 2 min  |\n"
+            "| Rest | 15 min |\n"
+            "| Fry  | 4 min  |\n"
+        )
+        result = md.diff_to_markdown(old, new)
+        # Exactly 2 changed rows in output, not 4.
+        changed_rows = [
+            line
+            for line in result.splitlines()
+            if line.startswith("|") and ("<ins" in line or "<del" in line)
+        ]
+        self.assertEqual(
+            len(changed_rows),
+            2,
+            f"expected 2 paired rows, got {len(changed_rows)}:\n{result}",
+        )
+        # The unchanged first cells must NOT be wrapped.
+        for row in changed_rows:
+            first_cell = row.split("|", 2)[1]
+            self.assertNotIn("<ins", first_cell)
+            self.assertNotIn("<del", first_cell)
+        # The numbers must be diffed.
+        joined = "\n".join(changed_rows)
+        for token in ("10", "15", "5", "4"):
+            self.assertIn(token, joined)
+
+    def test_unequal_row_counts_fall_back_to_full_row_emission(self):
+        # Counts differ → no pairing assumption, fall back to del-then-ins.
+        old = (
+            "| Step | Time |\n"
+            "| ---- | ---- |\n"
+            "| Mix  | 2    |\n"
+            "| Rest | 10   |\n"
+        )
+        new = (
+            "| Step | Time |\n"
+            "| ---- | ---- |\n"
+            "| Mix  | 2    |\n"
+            "| Rest | 15   |\n"
+            "| Fry  | 4    |\n"
+        )
+        # Just verifying it doesn't crash and still produces table rows.
+        result = md.diff_to_markdown(old, new)
+        table_rows = [l for l in result.splitlines() if l.startswith("|")]
+        self.assertTrue(len(table_rows) >= 4)
 
 
 class DiffTableRowAddTests(unittest.TestCase):

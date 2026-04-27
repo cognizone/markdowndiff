@@ -6,6 +6,13 @@ For each changed `.md` file, `markdowndiff` writes a sibling file under `.markdo
 
 Pairs nicely with [Claude Code](https://claude.com/claude-code): wire it up as a `Stop` hook and every time Claude finishes editing your docs, the rendered diff is one click away.
 
+## Example
+
+<img src="assets/preview.png" alt="Rendered markdown diff preview" width="670">
+
+
+A short before/after recipe rendered through `markdowndiff` — heading and paragraph edits get word-level inline highlights, list and table changes show only the cells that actually moved, and a wholly-modified code fence gets the amber side-border.
+
 ## Requirements
 
 - Python 3.9+
@@ -103,6 +110,8 @@ After a default run the script deletes any `.md` file under the output directory
 Cleanup is **skipped** when you pass pathspecs — partial runs shouldn't wipe files outside the filter. Hidden files (like `.mode`) and non-`.md` files are always preserved regardless of mode.
 
 ## Opening the output
+
+<img src="assets/project-view.png" alt="The .markdowndiff folder in the IntelliJ project view" width="140">
 
 In IntelliJ (or any JetBrains IDE): open any file under `.markdowndiff/`, right-click → "Open Preview" (or `⌘⇧A` → "Markdown Preview"). Inline HTML styles render natively.
 
