@@ -122,6 +122,15 @@ class WrapLineTests(unittest.TestCase):
         self.assertEqual(md.wrap_line("", md.wrap_ins), "")
         self.assertEqual(md.wrap_line("", md.wrap_del), "")
 
+    def test_indented_continuation_keeps_indent_outside_wrapper(self):
+        self.assertEqual(
+            md.wrap_line("    Tracked here.", lambda s: f"[{s}]"),
+            "    [Tracked here.]",
+        )
+
+    def test_whitespace_only_line_left_alone(self):
+        self.assertEqual(md.wrap_line("    ", lambda s: f"[{s}]"), "[    ]")
+
 
 class TokenizeLineTests(unittest.TestCase):
     def test_preserves_whitespace_runs(self):
