@@ -187,31 +187,34 @@ pip install -e .
 
 ```
 src/markdowndiff/
-  __init__.py    diff engine (`diff_to_markdown`) and fence-region helpers; re-exports the public API
+  __init__.py    pure facade: `__version__`, `__all__`, and re-exports from every other module
   __main__.py    `python3 -m markdowndiff` entry point
   cli.py         argparse, `main`, `resolve_base`
-  git_ops.py     git subprocess wrappers + content readers
+  engine.py      core diff engine (`diff_to_markdown`)
   processing.py  per-file diff generation (`process_file`) and stale-output cleanup (`cleanup_stale`)
-  styles.py      HTML/CSS constants (`INS_STYLE`, `DEL_STYLE`, block-border styles, `GENERATED_HEADER`)
-  wrap.py        tokenization, `wrap_ins`/`wrap_del`, table-aware and prefix-aware line wrappers
+  git_ops.py     git subprocess wrappers + content readers
+  fence.py       `FenceMap` + region detection for wholly-added/removed/modified fenced code blocks
   word_diff.py   `should_word_diff`, `inline_word_diff` for similar single-line replacements
+  wrap.py        tokenization, `wrap_ins`/`wrap_del`, table-aware and prefix-aware line wrappers
+  styles.py      HTML/CSS constants (`INS_STYLE`, `DEL_STYLE`, block-border styles, `GENERATED_HEADER`)
 ```
 
 Dependency direction (each module imports only from those listed beneath it):
 
 ```
-__main__   →  cli
-cli        →  __init__ (`__version__`), git_ops, processing
-processing →  __init__ (`diff_to_markdown`), git_ops, styles
-__init__   →  styles, wrap, word_diff, git_ops    (top-of-file re-exports)
-                                                   plus processing + cli (bottom-of-file re-exports)
-word_diff  →  wrap
-wrap       →  styles
-styles     →  (leaf — stdlib only)
-git_ops    →  (leaf — stdlib only)
+__main__    →  cli
+cli         →  __init__ (`__version__`), git_ops, processing
+processing  →  engine, git_ops, styles
+engine      →  fence, word_diff, wrap, styles
+fence       →  wrap
+word_diff   →  wrap
+wrap        →  styles
+styles      →  (leaf — stdlib only)
+git_ops     →  (leaf — stdlib only)
+__init__    →  every module above (re-export hub only)
 ```
 
-`__init__.py` re-exports leaf-module names at the top of the file and re-exports `processing` + `cli` names at the bottom. The bottom-of-file pattern lets those submodules import engine names (`diff_to_markdown`) from the package root without a circular-import error: by the time the bottom imports run, every top-level name in `__init__.py` is already defined.
+`__init__.py` is a thin facade — no logic, just docstring + `__version__` + `__all__` + re-export imports. All imports resolve eagerly except `from .cli import main`, which sits at the bottom of the file because `cli.py` imports `__version__` back from the package root: declaring `__version__` first and importing `cli` last breaks what would otherwise be a circular import.
 
 ### Public API
 

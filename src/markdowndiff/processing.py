@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import diff_to_markdown
+from .engine import diff_to_markdown
 from .git_ops import get_new_content, get_old_content
 from .styles import GENERATED_HEADER
 
 
 def process_file(path: str, base: str, root: Path, out_dir: Path) -> bool:
+    """Generate the rendered diff for `path` (`base` → working tree) under `out_dir`.
+
+    Returns False (and writes nothing) if the file is empty in both the base
+    revision and the working tree; True if a diff file was written.
+    """
     old = get_old_content(path, base, root)
     new = get_new_content(path, root)
     if not old and not new:
@@ -22,6 +27,11 @@ def process_file(path: str, base: str, root: Path, out_dir: Path) -> bool:
 
 
 def cleanup_stale(out_dir: Path, written: set[Path]) -> list[Path]:
+    """Delete every .md under `out_dir` not in `written`, then prune empty dirs.
+
+    Returns the list of deleted files. Non-`.md` files (and the persistent
+    `.mode` file) are preserved.
+    """
     if not out_dir.exists():
         return []
     removed: list[Path] = []

@@ -55,6 +55,12 @@ def resolve_base(
 
 
 def main() -> int:
+    """Entry point for the `markdowndiff` CLI.
+
+    Parses flags, resolves the base ref (via `resolve_base`), iterates over
+    changed `.md` files, and writes the rendered-diff output under
+    `<output>/`. Returns the process exit code (0 on success).
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Generate rendered-markdown diff files. For each changed .md "
