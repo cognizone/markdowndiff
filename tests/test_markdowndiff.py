@@ -78,6 +78,13 @@ class SplitBlockPrefixTests(unittest.TestCase):
     def test_blockquote(self):
         self.assertEqual(md.split_block_prefix("> quote"), ("> ", "quote"))
 
+    def test_bare_blockquote_marker(self):
+        # Empty blockquote-continuation lines must keep `>` as the prefix
+        # so wrap_line doesn't swallow it inside <ins>/<del>, which would
+        # break the blockquote in the rendered output.
+        self.assertEqual(md.split_block_prefix(">"), (">", ""))
+        self.assertEqual(md.split_block_prefix("> "), ("> ", ""))
+
     def test_plain_text_has_no_prefix(self):
         self.assertEqual(md.split_block_prefix("plain"), ("", "plain"))
 
@@ -130,6 +137,12 @@ class WrapLineTests(unittest.TestCase):
 
     def test_whitespace_only_line_left_alone(self):
         self.assertEqual(md.wrap_line("    ", lambda s: f"[{s}]"), "[    ]")
+
+    def test_bare_blockquote_marker_not_wrapped(self):
+        # `>` alone is a blockquote-continuation line; wrapping the literal
+        # `>` in <ins>/<del> turns it into HTML and breaks the blockquote.
+        self.assertEqual(md.wrap_line(">", md.wrap_ins), ">")
+        self.assertEqual(md.wrap_line("> ", md.wrap_del), "> ")
 
 
 class TokenizeLineTests(unittest.TestCase):
