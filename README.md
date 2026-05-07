@@ -183,6 +183,53 @@ For an editable install during development:
 pip install -e .
 ```
 
+### Project layout
+
+```
+src/markdowndiff/
+  __init__.py    diff engine (`diff_to_markdown`) and fence-region helpers; re-exports the public API
+  __main__.py    `python3 -m markdowndiff` entry point
+  cli.py         argparse, `main`, `resolve_base`
+  git_ops.py     git subprocess wrappers + content readers
+  processing.py  per-file diff generation (`process_file`) and stale-output cleanup (`cleanup_stale`)
+  styles.py      HTML/CSS constants (`INS_STYLE`, `DEL_STYLE`, block-border styles, `GENERATED_HEADER`)
+  wrap.py        tokenization, `wrap_ins`/`wrap_del`, table-aware and prefix-aware line wrappers
+  word_diff.py   `should_word_diff`, `inline_word_diff` for similar single-line replacements
+```
+
+Dependency direction (each module imports only from those listed beneath it):
+
+```
+__main__   →  cli
+cli        →  __init__ (`__version__`), git_ops, processing
+processing →  __init__ (`diff_to_markdown`), git_ops, styles
+__init__   →  styles, wrap, word_diff, git_ops    (top-of-file re-exports)
+                                                   plus processing + cli (bottom-of-file re-exports)
+word_diff  →  wrap
+wrap       →  styles
+styles     →  (leaf — stdlib only)
+git_ops    →  (leaf — stdlib only)
+```
+
+`__init__.py` re-exports leaf-module names at the top of the file and re-exports `processing` + `cli` names at the bottom. The bottom-of-file pattern lets those submodules import engine names (`diff_to_markdown`) from the package root without a circular-import error: by the time the bottom imports run, every top-level name in `__init__.py` is already defined.
+
+### Public API
+
+```python
+from markdowndiff import __version__, diff_to_markdown
+```
+
+The stable, supported package surface is the three names listed in
+`__init__.py`'s `__all__`:
+
+| Name              | What it is                                   |
+| ----------------- | -------------------------------------------- |
+| `__version__`     | Package version string.                      |
+| `diff_to_markdown(old: str, new: str) -> str` | Core diff function: takes the old and new contents of a markdown file as strings, returns the merged markdown with `<ins>`/`<del>` tags. |
+| `main()`          | CLI entry point used by the installed `markdowndiff` script. |
+
+All other names reachable from the `markdowndiff` module root (helpers like `wrap_ins`, `split_block_prefix`, `process_file`, fence-region utilities, etc.) are **internal** — they exist for tests and for cross-module use within the package, and may be renamed, moved, or removed without a major version bump. Library users should import only from the public surface above; if you have a use case for a currently-internal helper, open an issue and we can promote it.
+
 Fixtures cover the helper functions plus end-to-end `diff_to_markdown` scenarios including table edits, code-fence modifications (added/removed/modified), and the regressions shipped during the tool's early iterations. Extend the suite when adding behaviour so the existing scenarios stay locked down.
 
 ## License
