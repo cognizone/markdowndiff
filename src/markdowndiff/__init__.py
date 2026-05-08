@@ -58,7 +58,7 @@ from .wrap import (  # noqa: F401
     wrap_table_row,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = ["__version__", "diff_to_markdown", "main"]
 
 # `cli` imports `__version__` back from this package root, so it must be

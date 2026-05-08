@@ -459,6 +459,39 @@ class DiffTableColumnCountChangeTests(unittest.TestCase):
             f"no blank line between deleted and inserted tables:\n{result}",
         )
 
+    def test_no_blank_line_when_columns_match(self):
+        # Symmetric to test_old_and_new_tables_separated_by_blank_line: when
+        # the deleted and inserted rows share the same column count, the
+        # rows belong in the same table. Inserting a blank line splits a
+        # surrounding table in half — every row after it loses the header
+        # and renders as raw text in a previewer.
+        old = (
+            "| File | Group |\n"
+            "|---|---|\n"
+            "| A | alpha |\n"
+            "| **section header** | |\n"
+            "| C | gamma |\n"
+        )
+        new = (
+            "| File | Group |\n"
+            "|---|---|\n"
+            "| A | alpha |\n"
+            "| B | beta |\n"
+            "| **renamed header** | |\n"
+            "| C | gamma |\n"
+        )
+        result = md.diff_to_markdown(old, new)
+        lines = result.splitlines()
+        del_line_idxs = [i for i, l in enumerate(lines) if "<del" in l]
+        ins_line_idxs = [i for i, l in enumerate(lines) if "<ins" in l]
+        self.assertTrue(del_line_idxs and ins_line_idxs)
+        last_del = max(del_line_idxs)
+        first_ins = min(ins_line_idxs)
+        self.assertFalse(
+            any(lines[k].strip() == "" for k in range(last_del + 1, first_ins)),
+            f"blank line between deleted and inserted rows splits the surrounding table:\n{result}",
+        )
+
 
 class DiffTableRowAddTests(unittest.TestCase):
     def test_added_row_is_a_real_table_row(self):

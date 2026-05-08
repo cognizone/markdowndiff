@@ -22,6 +22,7 @@ from .word_diff import inline_word_diff, should_word_diff
 from .wrap import (
     is_fence_line,
     is_table_row,
+    table_column_count,
     wrap_del,
     wrap_ins,
     wrap_line,
@@ -197,11 +198,23 @@ def diff_to_markdown(old: str, new: str) -> str:
                     for i in old_row_idxs:
                         emit_old_delete(i, old_lines[i])
                     if old_row_idxs and new_row_idxs:
-                        # Without a blank line between the deleted block and
-                        # the inserted block, GFM treats the two row groups as
-                        # a single table — and a column-count change makes the
-                        # combined table render with merged or trailing cells.
-                        out.append("")
+                        old_cols = {
+                            table_column_count(old_lines[i])
+                            for i in old_row_idxs
+                        }
+                        new_cols = {
+                            table_column_count(new_lines[j])
+                            for j in new_row_idxs
+                        }
+                        if old_cols != new_cols or len(old_cols) > 1:
+                            # Column-count changed: separate the deleted and
+                            # inserted row groups with a blank line, otherwise
+                            # GFM merges them into a single table and the
+                            # mismatched rows render with trailing/merged cells.
+                            # When columns match, leave them joined so the
+                            # surrounding table (rows above and below this
+                            # replace block) keeps rendering as one table.
+                            out.append("")
                     for j in new_row_idxs:
                         emit_new(j, new_lines[j], wrap_ins)
                 had_rows = bool(old_row_idxs or new_row_idxs)
