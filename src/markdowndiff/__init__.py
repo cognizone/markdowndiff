@@ -50,6 +50,7 @@ from .wrap import (  # noqa: F401
     is_table_row,
     is_table_separator_row,
     split_block_prefix,
+    table_column_count,
     tokenize_line,
     wrap_del,
     wrap_ins,
@@ -57,7 +58,7 @@ from .wrap import (  # noqa: F401
     wrap_table_row,
 )
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __all__ = ["__version__", "diff_to_markdown", "main"]
 
 # `cli` imports `__version__` back from this package root, so it must be

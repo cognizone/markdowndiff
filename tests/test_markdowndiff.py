@@ -371,6 +371,95 @@ class DiffTableMultiRowEditTests(unittest.TestCase):
         self.assertTrue(len(table_rows) >= 4)
 
 
+class DiffTableColumnCountChangeTests(unittest.TestCase):
+    """Regression: when a table loses (or gains) a column, word-diff used to
+    wrap the dropped cell — including its bordering `|` — inside a `<del>` tag.
+    Markdown renderers then collapse that pipe-inside-HTML into the previous
+    cell, so the strikethrough text bleeds visually into the surviving column.
+    """
+
+    def test_pipe_never_wrapped_inside_del_or_ins(self):
+        old = (
+            "| ID | Constraint | Notes | Future |\n"
+            "|---|---|---|---|\n"
+            "| C1 | Single MS | shared MS | Multi-country |\n"
+            "| C2 | Same vehicles | shared set | Per-case sets |\n"
+        )
+        new = (
+            "| ID | Constraint | Notes |\n"
+            "|---|---|---|\n"
+            "| C1 | Single MS | shared MS |\n"
+            "| C2 | Same vehicles | shared set |\n"
+        )
+        result = md.diff_to_markdown(old, new)
+        # No `<del>...|...</del>` or `<ins>...|...</ins>` — pipes inside
+        # diff-marker HTML are what caused the renderer to merge cells.
+        for tag_open, tag_close in (("<del", "</del>"), ("<ins", "</ins>")):
+            cursor = 0
+            while True:
+                start = result.find(tag_open, cursor)
+                if start == -1:
+                    break
+                end = result.find(tag_close, start)
+                self.assertNotEqual(end, -1, "unbalanced diff tag")
+                self.assertNotIn(
+                    "|",
+                    result[start:end],
+                    f"column-boundary `|` wrapped inside {tag_open}…{tag_close}:\n{result}",
+                )
+                cursor = end + len(tag_close)
+
+    def test_pipe_never_wrapped_when_column_added(self):
+        # Symmetric to test_pipe_never_wrapped_inside_del_or_ins: gaining a
+        # column (3→4) must not wrap the new column-boundary `|` inside an
+        # `<ins>` either.
+        old = (
+            "| ID | Constraint | Notes |\n"
+            "|---|---|---|\n"
+            "| C1 | Single MS | shared MS |\n"
+            "| C2 | Same vehicles | shared set |\n"
+        )
+        new = (
+            "| ID | Constraint | Notes | Future |\n"
+            "|---|---|---|---|\n"
+            "| C1 | Single MS | shared MS | Multi-country |\n"
+            "| C2 | Same vehicles | shared set | Per-case sets |\n"
+        )
+        result = md.diff_to_markdown(old, new)
+        for tag_open, tag_close in (("<del", "</del>"), ("<ins", "</ins>")):
+            cursor = 0
+            while True:
+                start = result.find(tag_open, cursor)
+                if start == -1:
+                    break
+                end = result.find(tag_close, start)
+                self.assertNotEqual(end, -1, "unbalanced diff tag")
+                self.assertNotIn(
+                    "|",
+                    result[start:end],
+                    f"column-boundary `|` wrapped inside {tag_open}…{tag_close}:\n{result}",
+                )
+                cursor = end + len(tag_close)
+
+    def test_old_and_new_tables_separated_by_blank_line(self):
+        # Without a blank line between the deleted block and the inserted
+        # block, GFM treats the two row groups as one table and the rendered
+        # output gets merged or trailing cells.
+        old = "| a | b | c |\n|---|---|---|\n| 1 | 2 | 3 |\n"
+        new = "| a | b |\n|---|---|\n| 1 | 2 |\n"
+        result = md.diff_to_markdown(old, new)
+        lines = result.splitlines()
+        del_line_idxs = [i for i, l in enumerate(lines) if "<del" in l]
+        ins_line_idxs = [i for i, l in enumerate(lines) if "<ins" in l]
+        self.assertTrue(del_line_idxs and ins_line_idxs)
+        last_del = max(del_line_idxs)
+        first_ins = min(ins_line_idxs)
+        self.assertTrue(
+            any(lines[k].strip() == "" for k in range(last_del + 1, first_ins)),
+            f"no blank line between deleted and inserted tables:\n{result}",
+        )
+
+
 class DiffTableRowAddTests(unittest.TestCase):
     def test_added_row_is_a_real_table_row(self):
         old = "| a | b |\n|---|---|\n| 1 | 2 |\n"

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import difflib
 
-from .wrap import split_block_prefix, tokenize_line, wrap_del, wrap_ins
+from .wrap import (
+    is_table_row,
+    split_block_prefix,
+    table_column_count,
+    tokenize_line,
+    wrap_del,
+    wrap_ins,
+)
 
 WORD_DIFF_RATIO_THRESHOLD = 0.6
 
@@ -12,12 +19,21 @@ WORD_DIFF_RATIO_THRESHOLD = 0.6
 def should_word_diff(old_line: str, new_line: str) -> bool:
     """True if a single-line replace should be highlighted at word level.
 
-    Two rules: refuse if either line contains a backtick (HTML inside a
-    code span wouldn't render), and require difflib similarity ≥
-    `WORD_DIFF_RATIO_THRESHOLD` so unrelated rewrites fall back to whole-
-    line ins/del rather than producing a noisy character-level diff.
+    Three rules: refuse if either line contains a backtick (HTML inside a
+    code span wouldn't render); refuse if both lines are table rows with
+    different column counts (a per-cell tokenizer would wrap a column-
+    boundary `|` inside a `<del>` tag, which markdown renderers then
+    collapse into the previous cell); otherwise require difflib similarity
+    ≥ `WORD_DIFF_RATIO_THRESHOLD` so unrelated rewrites fall back to
+    whole-line ins/del rather than producing a noisy character-level diff.
     """
     if "`" in old_line or "`" in new_line:
+        return False
+    if (
+        is_table_row(old_line)
+        and is_table_row(new_line)
+        and table_column_count(old_line) != table_column_count(new_line)
+    ):
         return False
     return difflib.SequenceMatcher(
         a=old_line, b=new_line, autojunk=False

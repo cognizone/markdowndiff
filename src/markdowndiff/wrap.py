@@ -65,6 +65,12 @@ def is_table_row(line: str) -> bool:
     return len(s) >= 2 and s.startswith("|") and s.endswith("|")
 
 
+def table_column_count(line: str) -> int:
+    """Number of cells in a markdown table row. Caller should gate on `is_table_row`."""
+    parts = line.rstrip("\n").rstrip().split("|")
+    return max(len(parts) - 2, 0)
+
+
 def is_table_separator_row(line: str) -> bool:
     """True if `line` is a markdown table separator row (`|---|---|` etc.)."""
     s = line.strip()

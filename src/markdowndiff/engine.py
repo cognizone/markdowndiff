@@ -196,6 +196,12 @@ def diff_to_markdown(old: str, new: str) -> str:
                 else:
                     for i in old_row_idxs:
                         emit_old_delete(i, old_lines[i])
+                    if old_row_idxs and new_row_idxs:
+                        # Without a blank line between the deleted block and
+                        # the inserted block, GFM treats the two row groups as
+                        # a single table — and a column-count change makes the
+                        # combined table render with merged or trailing cells.
+                        out.append("")
                     for j in new_row_idxs:
                         emit_new(j, new_lines[j], wrap_ins)
                 had_rows = bool(old_row_idxs or new_row_idxs)
