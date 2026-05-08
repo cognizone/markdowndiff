@@ -441,22 +441,46 @@ class DiffTableColumnCountChangeTests(unittest.TestCase):
                 )
                 cursor = end + len(tag_close)
 
-    def test_old_and_new_tables_separated_by_blank_line(self):
-        # Without a blank line between the deleted block and the inserted
-        # block, GFM treats the two row groups as one table and the rendered
-        # output gets merged or trailing cells.
+    def test_column_drop_renders_as_single_row_per_input(self):
+        # When a column is dropped, each row is rendered once with the
+        # dropped cell wrapped in <del> — not as a separate deleted row
+        # plus inserted row. The pipes around the wrapped cell stay outside
+        # the tag (covered by test_pipe_never_wrapped_inside_del_or_ins) so
+        # the table keeps rendering.
         old = "| a | b | c |\n|---|---|---|\n| 1 | 2 | 3 |\n"
         new = "| a | b |\n|---|---|\n| 1 | 2 |\n"
         result = md.diff_to_markdown(old, new)
-        lines = result.splitlines()
-        del_line_idxs = [i for i, l in enumerate(lines) if "<del" in l]
-        ins_line_idxs = [i for i, l in enumerate(lines) if "<ins" in l]
-        self.assertTrue(del_line_idxs and ins_line_idxs)
-        last_del = max(del_line_idxs)
-        first_ins = min(ins_line_idxs)
-        self.assertTrue(
-            any(lines[k].strip() == "" for k in range(last_del + 1, first_ins)),
-            f"no blank line between deleted and inserted tables:\n{result}",
+        table_rows = [l for l in result.splitlines() if l.startswith("|")]
+        self.assertEqual(
+            len(table_rows),
+            3,
+            f"expected one row per source row, got {len(table_rows)}:\n{result}",
+        )
+        # Header and data rows highlight the dropped cell; the separator
+        # is emitted unchanged (its content is structural, not diffable).
+        self.assertIn("<del", table_rows[0])
+        self.assertNotIn("<del", table_rows[1])
+        self.assertNotIn("<ins", table_rows[1])
+        self.assertIn("<del", table_rows[2])
+
+    def test_column_add_renders_as_single_row_with_ins(self):
+        # Symmetric: gaining a column emits one row per source row with
+        # only the new cell wrapped in <ins>. This is the user-facing case
+        # that motivated the cell-diff: appending a long cell to a row
+        # used to render as two full rows (all-del + all-ins), which is
+        # noisy and obscures that only one cell actually changed.
+        old = "| Action | Description | UC |\n"
+        new = (
+            "| Action | Description | UC | Notes |\n"
+        )
+        result = md.diff_to_markdown(old, new)
+        ins_count = result.count("<ins")
+        del_count = result.count("<del")
+        self.assertEqual(
+            ins_count, 1, f"expected 1 <ins>, got {ins_count}:\n{result}"
+        )
+        self.assertEqual(
+            del_count, 0, f"expected 0 <del>, got {del_count}:\n{result}"
         )
 
     def test_no_blank_line_when_columns_match(self):
