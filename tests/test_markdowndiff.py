@@ -559,6 +559,51 @@ class DiffTableEditPlusParagraphDeleteTests(unittest.TestCase):
                 )
 
 
+class DiffFragmentationFallbackTests(unittest.TestCase):
+    """Regression: heavily rewritten paragraphs used to render as a long
+    chain of small <del>/<ins> fragments (15-20+ tags on one paragraph),
+    each carrying its own border + padding. Eye can't follow the change.
+    Above WORD_DIFF_MAX_FRAGMENTS, fall back to whole-line del + ins."""
+
+    def test_heavy_rewrite_falls_back_to_whole_line(self):
+        old = (
+            "A separate subscription model lets a Keeper, Owner, ECM, or EC "
+            "declaration issuing body opt in to receive notifications about "
+            "changes to registrations they are identified within. The "
+            "subscription default itself posture is undefined opt-in: in parties."
+        )
+        new = (
+            "A separate subscription model lets a Keeper, Owner, ECM, EC "
+            "declaration issuing body, or NSA opt in to receive notifications "
+            "about changes to registrations they are identified within (for "
+            "NSAs: by Member State). The default posture is opt-in: parties."
+        )
+        result = md.diff_to_markdown(old, new)
+        # Whole-line fallback emits exactly one <del> tag and one <ins> tag.
+        self.assertEqual(
+            result.count("<del"),
+            1,
+            f"expected single <del> for fragmented diff, got {result.count('<del')}:\n{result}",
+        )
+        self.assertEqual(
+            result.count("<ins"),
+            1,
+            f"expected single <ins> for fragmented diff, got {result.count('<ins')}:\n{result}",
+        )
+
+    def test_moderate_edit_still_word_diffs(self):
+        # 2-3 fragment edits should keep the fine-grained inline diff —
+        # the fallback only kicks in when the diff is genuinely chaotic.
+        old = "The default posture is opt-in: parties receive notifications only after explicit subscription."
+        new = "The default posture is opt-out: parties receive notifications only after explicit unsubscription."
+        result = md.diff_to_markdown(old, new)
+        # At least 2 ins/del pairs (the two changed words) and the unchanged
+        # text between them survives outside any tag.
+        self.assertGreaterEqual(result.count("<del"), 2)
+        self.assertGreaterEqual(result.count("<ins"), 2)
+        self.assertIn("parties receive notifications only after explicit", result)
+
+
 class DiffWhollyAddedFenceTests(unittest.TestCase):
     def test_green_border_div_around_added_code_block(self):
         old = "# Title\n\nEnd.\n"

@@ -14,27 +14,61 @@ from .wrap import (
 )
 
 WORD_DIFF_RATIO_THRESHOLD = 0.6
+WORD_DIFF_MAX_FRAGMENTS = 8
+
+
+def _count_word_diff_fragments(old_line: str, new_line: str) -> int:
+    """Count the number of `<del>`/`<ins>` tags an `inline_word_diff` would emit.
+
+    Mirrors `inline_word_diff`'s tokenization and prefix-peeling so the
+    count reflects what the user would actually see. A `replace` opcode
+    contributes 2 (one `<del>` and one `<ins>`); pure `insert` and
+    `delete` opcodes contribute 1 each.
+    """
+    old_prefix, old_content = split_block_prefix(old_line)
+    new_prefix, new_content = split_block_prefix(new_line)
+    if old_prefix and old_prefix == new_prefix:
+        old_line, new_line = old_content, new_content
+    old_toks = tokenize_line(old_line)
+    new_toks = tokenize_line(new_line)
+    matcher = difflib.SequenceMatcher(a=old_toks, b=new_toks, autojunk=False)
+    count = 0
+    for tag, *_ in matcher.get_opcodes():
+        if tag == "replace":
+            count += 2
+        elif tag == "insert" or tag == "delete":
+            count += 1
+    return count
 
 
 def should_word_diff(old_line: str, new_line: str) -> bool:
     """True if a single-line replace should be highlighted at word level.
 
-    Two rules: refuse if either line contains a backtick (HTML inside a
-    code span wouldn't render); otherwise require similarity ≥
-    `WORD_DIFF_RATIO_THRESHOLD` so unrelated rewrites fall back to
-    whole-line ins/del rather than producing a noisy diff. For two table
-    rows the similarity ratio is computed over the *cell list* — a long
-    appended cell would otherwise drag a character-level ratio below the
-    threshold even when most cells are unchanged.
+    Three rules: refuse if either line contains a backtick (HTML inside a
+    code span wouldn't render); refuse if a token-level diff would emit
+    more than `WORD_DIFF_MAX_FRAGMENTS` `<del>`/`<ins>` tags (heavily
+    rewritten paragraphs become unreadable as a chain of small fragments
+    — whole-line ins/del shows the before and after cleanly); otherwise
+    require similarity ≥ `WORD_DIFF_RATIO_THRESHOLD` so unrelated
+    rewrites fall back to whole-line ins/del rather than producing a
+    noisy diff. For two table rows the similarity ratio is computed over
+    the *cell list* — a long appended cell would otherwise drag a
+    character-level ratio below the threshold even when most cells are
+    unchanged. Table rows skip the fragmentation gate because cell-level
+    diffing keeps fragment counts naturally low (one per changed cell).
     """
     if "`" in old_line or "`" in new_line:
         return False
+    is_tbl = is_table_row(old_line) and is_table_row(new_line)
+    if not is_tbl:
+        if _count_word_diff_fragments(old_line, new_line) > WORD_DIFF_MAX_FRAGMENTS:
+            return False
     char_ratio = difflib.SequenceMatcher(
         a=old_line, b=new_line, autojunk=False
     ).ratio()
     if char_ratio >= WORD_DIFF_RATIO_THRESHOLD:
         return True
-    if is_table_row(old_line) and is_table_row(new_line):
+    if is_tbl:
         # Char-level similarity drags below threshold when one row gains a
         # long cell — most cells are unchanged but the added content swells
         # the denominator. Cell-list similarity captures "most cells match"
